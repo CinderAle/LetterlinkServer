@@ -5,7 +5,7 @@ namespace LetterlinkServer
 {
     public class SMTPServer : Server
     {
-        private const int messageLength = 4;
+        private const int commandLength = 4;
         public SMTPServer()
         {
             port = 25;
@@ -27,7 +27,7 @@ namespace LetterlinkServer
 
         protected override bool chooseAction(string? message, StreamReader reader, StreamWriter writer)
         {
-            string command = message != null ? message.Substring(0, messageLength) : string.Empty;
+            string command = message != null ? message.Substring(0, commandLength) : string.Empty;
             if (supportedActions.ContainsKey(command) && message != null)
             {
                 supportedActions[command].Invoke(message, reader, writer);

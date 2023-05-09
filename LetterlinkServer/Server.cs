@@ -8,7 +8,7 @@ namespace LetterlinkServer
         protected Dictionary<string, Action<string, StreamReader, StreamWriter>> supportedActions;
         public abstract void startServer();
         protected abstract void handleMessages(TcpClient client);
-        protected abstract bool chooseAction(string message, StreamReader reader, StreamWriter writer);
+        protected abstract bool chooseAction(string? message, StreamReader reader, StreamWriter writer);
         protected abstract void initActions();
     }
 }
