@@ -12,6 +12,8 @@ namespace LetterlinkServer
         private const string password = "880461";
         private const string database = "letterlink_db";
         private const string logs_table = "users_logs";
+        private const string inbox_table = "inbox";
+        private const string sent_table = "sent";
 
         public MySQLAccess()
         {
@@ -32,7 +34,9 @@ namespace LetterlinkServer
             {
                 string query = "SELECT login FROM " + logs_table + " WHERE(login='" + login + "');";
                 MySqlDataReader reader = new MySqlCommand(query, connection).ExecuteReader();
-                return reader.Read();
+                bool isSuccess = reader.Read();
+                reader.Close();
+                return isSuccess;
             }
             else
                 return false;
@@ -44,7 +48,9 @@ namespace LetterlinkServer
             {
                 string query = "SELECT password FROM " + logs_table + " WHERE(login='" + login + "');";
                 MySqlDataReader reader = new MySqlCommand(query, connection).ExecuteReader();
-                return password.Equals(reader.GetString(0));
+                string actualPassword = reader.GetString(0);
+                reader.Close();
+                return password.Equals(actualPassword);
             }
             else
                 return false;
@@ -56,10 +62,43 @@ namespace LetterlinkServer
             {
                 string query = "INSERT INTO " + logs_table + "(login,password) VALUES ('" + login + "','" + password + "');";
                 MySqlDataReader reader = new MySqlCommand(query, connection).ExecuteReader();
-                return reader.GetString(0).Length > 0;
+                reader.Close();
+                return true;
             }
             else
                 return false;
+        }
+
+        public int[]? AddMessage(string sender, string recipient)
+        {
+            if(connection != null)
+            {
+                string query = "INSERT INTO " + sent_table + "(login) VALUES ('" + sender + "');";
+                MySqlDataReader reader = new MySqlCommand(query, connection).ExecuteReader();
+                reader.Close();
+
+                query = "INSERT INTO " + inbox_table + "(login) VALUES ('" + recipient + "');";
+                reader = new MySqlCommand(query, connection).ExecuteReader();
+                reader.Close();
+
+                query = "SELECT uid FROM " + sent_table + " WHERE(login='" + sender + "')";
+                reader = new MySqlCommand(query, connection).ExecuteReader();
+                int senderID = 0;
+                while(reader.Read())
+                    senderID = reader.GetInt32(0);
+                reader.Close();
+
+                query = "SELECT uid FROM " + inbox_table + " WHERE(login='" + recipient + "')";
+                reader = new MySqlCommand(query, connection).ExecuteReader();
+                int recipientID = 0;
+                while(reader.Read())
+                    recipientID = reader.GetInt32(0);
+                reader.Close();
+
+                return new int[] { senderID , recipientID };
+            }
+            else
+                return null;
         }
 
         public void Close()

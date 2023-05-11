@@ -15,6 +15,21 @@ namespace LetterlinkServer
             port = 21;
         }
 
+        protected override async void writeClient(string message)
+        {
+            StreamWriter writer = new StreamWriter(clientStream);
+            await writer.WriteAsync(message);
+            await writer.FlushAsync();
+        }
+
+        protected override string readClient()
+        {
+            StreamReader reader = new StreamReader(clientStream);
+            char[] buffer = new char[8192];
+            int charsRead = reader.Read(buffer, 0, 8192);
+            return new string(buffer).Substring(0, charsRead).Replace("\0", "");
+        }
+
         public override async void startServer()
         {
             TcpListener listener = new TcpListener(IPAddress.Any, port);
@@ -24,11 +39,11 @@ namespace LetterlinkServer
             while (true)
             {
                 TcpClient client = await listener.AcceptTcpClientAsync();
-                handleMessages(client);
+                handleMessages();
             }
         }
 
-        protected override bool chooseAction(string? message, StreamReader reader, StreamWriter writer)
+        protected override bool chooseAction(string? message)
         {
             string command = string.Empty;
             foreach (string method in supportedActions.Keys)
@@ -39,26 +54,31 @@ namespace LetterlinkServer
                 }
             if (!command.Equals(string.Empty) && message != null)
             {
-                supportedActions[command].Invoke(message, reader, writer);
+                supportedActions[command].Invoke(message);
                 return command.Equals("LOGOUT");
             }
             else
                 return true;
         }
 
-        protected override async void handleMessages(TcpClient client)
+        protected override async void handleMessages()
         {
             Console.WriteLine("Client connected");
-            NetworkStream stream = client.GetStream();
-            StreamReader reader = new StreamReader(stream);
-            StreamWriter writer = new StreamWriter(stream);
 
             while (true)
             {
-                string? message = await reader.ReadLineAsync();
-                Console.WriteLine("Client: " + message);
-                if (!chooseAction(message, reader, writer))
+                string message;
+                try
+                {
+                    message = readClient();
+                }
+                catch (Exception)
+                {
                     break;
+                }
+                Console.WriteLine("Client: " + message);
+                /*if (!chooseAction(message, reader, writer))
+                    break;*/
             }
 
             client.Close();
@@ -102,167 +122,167 @@ namespace LetterlinkServer
             supportedActions.Add("NOOP", NOOP);
         }
 
-        private void USER(string message, StreamReader reader, StreamWriter writer)
+        private void USER(string message)
         {
 
         }
 
-        private void PASS(string message, StreamReader reader, StreamWriter writer)
+        private void PASS(string message)
         {
 
         }
 
-        private void ACCT(string message, StreamReader reader, StreamWriter writer)
+        private void ACCT(string message)
         {
 
         }
 
-        private void CWD(string message, StreamReader reader, StreamWriter writer)
+        private void CWD(string message)
         {
 
         }
 
-        private void CDUP(string message, StreamReader reader, StreamWriter writer)
+        private void CDUP(string message)
         {
 
         }
 
-        private void SMNT(string message, StreamReader reader, StreamWriter writer)
+        private void SMNT(string message)
         {
 
         }
 
-        private void REIN(string message, StreamReader reader, StreamWriter writer)
+        private void REIN(string message)
         {
 
         }
 
-        private void QUIT(string message, StreamReader reader, StreamWriter writer)
+        private void QUIT(string message)
         {
 
         }
 
-        private void PORT(string message, StreamReader reader, StreamWriter writer)
+        private void PORT(string message)
         {
 
         }
 
-        private void PASV(string message, StreamReader reader, StreamWriter writer)
+        private void PASV(string message)
         {
 
         }
 
-        private void TYPE(string message, StreamReader reader, StreamWriter writer)
+        private void TYPE(string message)
         {
 
         }
 
-        private void STRU(string message, StreamReader reader, StreamWriter writer)
+        private void STRU(string message)
         {
 
         }
 
-        private void MODE(string message, StreamReader reader, StreamWriter writer)
+        private void MODE(string message)
         {
 
         }
 
-        private void RETR(string message, StreamReader reader, StreamWriter writer)
+        private void RETR(string message)
         {
 
         }
 
-        private void STOR(string message, StreamReader reader, StreamWriter writer)
+        private void STOR(string message)
         {
 
         }
 
-        private void STOU(string message, StreamReader reader, StreamWriter writer)
+        private void STOU(string message)
         {
 
         }
 
-        private void APPE(string message, StreamReader reader, StreamWriter writer)
+        private void APPE(string message)
         {
 
         }
 
-        private void ALLO(string message, StreamReader reader, StreamWriter writer)
+        private void ALLO(string message)
         {
 
         }
 
-        private void REST(string message, StreamReader reader, StreamWriter writer)
+        private void REST(string message)
         {
 
         }
 
-        private void RNFR(string message, StreamReader reader, StreamWriter writer)
+        private void RNFR(string message)
         {
 
         }
 
-        private void RNTO(string message, StreamReader reader, StreamWriter writer)
+        private void RNTO(string message)
         {
 
         }
 
-        private void ABOR(string message, StreamReader reader, StreamWriter writer)
+        private void ABOR(string message)
         {
 
         }
 
-        private void DELE(string message, StreamReader reader, StreamWriter writer)
+        private void DELE(string message)
         {
 
         }
 
-        private void RMD(string message, StreamReader reader, StreamWriter writer)
+        private void RMD(string message)
         {
 
         }
 
-        private void MKD(string message, StreamReader reader, StreamWriter writer)
+        private void MKD(string message)
         {
 
         }
 
-        private void PWD(string message, StreamReader reader, StreamWriter writer)
+        private void PWD(string message)
         {
 
         }
 
-        private void LIST(string message, StreamReader reader, StreamWriter writer)
+        private void LIST(string message)
         {
 
         }
 
-        private void NLST(string message, StreamReader reader, StreamWriter writer)
+        private void NLST(string message)
         {
 
         }
 
-        private void SITE(string message, StreamReader reader, StreamWriter writer)
+        private void SITE(string message)
         {
 
         }
 
-        private void SYST(string message, StreamReader reader, StreamWriter writer)
+        private void SYST(string message)
         {
 
         }
 
-        private void STAT(string message, StreamReader reader, StreamWriter writer)
+        private void STAT(string message)
         {
 
         }
 
-        private void HELP(string message, StreamReader reader, StreamWriter writer)
+        private void HELP(string message)
         {
 
         }
 
-        private void NOOP(string message, StreamReader reader, StreamWriter writer)
+        private void NOOP(string message)
         {
 
         }

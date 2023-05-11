@@ -13,6 +13,21 @@ namespace LetterlinkServer
             initActions();
         }
 
+        protected override async void writeClient(string message)
+        {
+            StreamWriter writer = new StreamWriter(clientStream);
+            await writer.WriteAsync(message);
+            await writer.FlushAsync();
+        }
+
+        protected override string readClient()
+        {
+            StreamReader reader = new StreamReader(clientStream);
+            char[] buffer = new char[8192];
+            int charsRead = reader.Read(buffer, 0, 8192);
+            return new string(buffer).Substring(0, charsRead).Replace("\0", "");
+        }
+
         public override async void startServer()
         {
             TcpListener listener = new TcpListener(IPAddress.Any, port);
@@ -22,11 +37,11 @@ namespace LetterlinkServer
             while (true)
             {
                 TcpClient client = await listener.AcceptTcpClientAsync();
-                handleMessages(client);
+                handleMessages();
             }
         }
 
-        protected override async void handleMessages(TcpClient client)
+        protected override async void handleMessages()
         {
             Console.WriteLine("Client connected");
             NetworkStream stream = client.GetStream();
@@ -37,7 +52,7 @@ namespace LetterlinkServer
             {
                 string? message = await reader.ReadLineAsync();
                 Console.WriteLine("Client: " + message);
-                if (!chooseAction(message, reader, writer))
+                if (!chooseAction(message))
                     break;
             }
 
@@ -45,7 +60,7 @@ namespace LetterlinkServer
             Console.WriteLine("Client disconnected");
         }
 
-        protected override bool chooseAction(string? message, StreamReader reader, StreamWriter writer)
+        protected override bool chooseAction(string? message)
         {
             string command = string.Empty;
             foreach (string method in supportedActions.Keys)
@@ -56,7 +71,7 @@ namespace LetterlinkServer
                 }
             if (!command.Equals(string.Empty) && message != null)
             {
-                supportedActions[command].Invoke(message, reader, writer);
+                supportedActions[command].Invoke(message);
                 return command.Equals("LOGOUT");
             }
             else
@@ -78,57 +93,57 @@ namespace LetterlinkServer
             supportedActions.Add("RSET", RSET);
         }
 
-        private void NOOP(string message, StreamReader reader, StreamWriter writer)
+        private void NOOP(string message)
         {
 
         }
 
-        private void QUIT(string message, StreamReader reader, StreamWriter writer)
+        private void QUIT(string message)
         {
 
         }
 
-        private void USER(string message, StreamReader reader, StreamWriter writer)
+        private void USER(string message)
         {
 
         }
 
-        private void PASS(string message, StreamReader reader, StreamWriter writer)
+        private void PASS(string message)
         {
 
         }
 
-        private void APOP(string message, StreamReader reader, StreamWriter writer)
+        private void APOP(string message)
         {
 
         }
 
-        private void STAT(string message, StreamReader reader, StreamWriter writer)
+        private void STAT(string message)
         {
 
         }
 
-        private void LIST(string message, StreamReader reader, StreamWriter writer)
+        private void LIST(string message)
         {
 
         }
 
-        private void RETR(string message, StreamReader reader, StreamWriter writer)
+        private void RETR(string message)
         {
 
         }
 
-        private void TOP(string message, StreamReader reader, StreamWriter writer)
+        private void TOP(string message)
         {
 
         }
 
-        private void DELE(string message, StreamReader reader, StreamWriter writer)
+        private void DELE(string message)
         {
 
         }
 
-        private void RSET(string message, StreamReader reader, StreamWriter writer)
+        private void RSET(string message)
         {
 
         }

@@ -13,6 +13,21 @@ namespace LetterlinkServer
             initActions();
         }
 
+        protected override async void writeClient(string message)
+        {
+            StreamWriter writer = new StreamWriter(clientStream);
+            await writer.WriteAsync(message);
+            await writer.FlushAsync();
+        }
+
+        protected override string readClient()
+        {
+            StreamReader reader = new StreamReader(clientStream);
+            char[] buffer = new char[8192];
+            int charsRead = reader.Read(buffer, 0, 8192);
+            return new string(buffer).Substring(0, charsRead).Replace("\0", "");
+        }
+
         public override async void startServer()
         {
             TcpListener listener = new TcpListener(IPAddress.Any, port);
@@ -22,11 +37,11 @@ namespace LetterlinkServer
             while (true)
             {
                 TcpClient client = await listener.AcceptTcpClientAsync();
-                handleMessages(client);
+                handleMessages();
             }
         }
 
-        protected override bool chooseAction(string? message, StreamReader reader, StreamWriter writer)
+        protected override bool chooseAction(string? message)
         {
             string command = string.Empty;
             foreach(string method in supportedActions.Keys)
@@ -37,14 +52,14 @@ namespace LetterlinkServer
                 }
             if (!command.Equals(string.Empty) && message != null)
             {
-                supportedActions[command].Invoke(message, reader, writer);
+                supportedActions[command].Invoke(message);
                 return command.Equals("LOGOUT");
             }
             else
                 return true; 
         }
 
-        protected override async void handleMessages(TcpClient client)
+        protected override async void handleMessages()
         {
             Console.WriteLine("Client connected");
             NetworkStream stream = client.GetStream();
@@ -55,16 +70,17 @@ namespace LetterlinkServer
             {
                 string? message = await reader.ReadLineAsync();
                 Console.WriteLine("Client: " + message);
-                if (!chooseAction(message, reader, writer))
+                if (!chooseAction(message))
                     break;
             }
 
             client.Close();
             Console.WriteLine("Client disconnected");
         }
-
+        
         protected override void initActions()
         {
+            supportedActions = new Dictionary<string, Action<string>>();
             supportedActions.Add("CAPABILITY", CAPABILITY);
             supportedActions.Add("NOOP", NOOP);
             supportedActions.Add("LOGOUT", LOGOUT);
@@ -91,121 +107,121 @@ namespace LetterlinkServer
             supportedActions.Add("UID", UID);
         }
 
-        private void CAPABILITY(string message, StreamReader reader, StreamWriter writer)
+        private void CAPABILITY(string message)
         {
 
         }
 
-        private void NOOP(string message, StreamReader reader, StreamWriter writer)
+        private void NOOP(string message)
         {
 
         }
 
-        private void LOGOUT(string message, StreamReader reader, StreamWriter writer)
+        private void LOGOUT(string message)
         {
 
         }
 
-        private void AUTHENTICATE(string message, StreamReader reader, StreamWriter writer)
+        private void AUTHENTICATE(string message)
         {
 
         }
 
-        private void LOGIN(string message, StreamReader reader, StreamWriter writer)
+        private void LOGIN(string message)
         {
 
         }
 
-        private void SELECT(string message, StreamReader reader, StreamWriter writer)
+        private void SELECT(string message)
         {
 
         }
 
-        private void EXAMINE(string message, StreamReader reader, StreamWriter writer)
+        private void EXAMINE(string message)
         {
 
         }
 
-        private void CREATE(string message, StreamReader reader, StreamWriter writer)
+        private void CREATE(string message)
         {
 
         }
 
-        private void DELETE(string message, StreamReader reader, StreamWriter writer)
+        private void DELETE(string message)
         {
 
         }
 
-        private void RENAME(string message, StreamReader reader, StreamWriter writer)
+        private void RENAME(string message)
         {
 
         }
 
-        private void SUBSCRIBE(string message, StreamReader reader, StreamWriter writer)
+        private void SUBSCRIBE(string message)
         {
 
         }
 
-        private void UNSUBSCRIBE(string message, StreamReader reader, StreamWriter writer)
+        private void UNSUBSCRIBE(string message)
         {
 
         }
-        private void LIST(string message, StreamReader reader, StreamWriter writer)
-        {
-
-        }
-
-        private void LSUB(string message, StreamReader reader, StreamWriter writer)
+        private void LIST(string message)
         {
 
         }
 
-        private void STATUS(string message, StreamReader reader, StreamWriter writer)
+        private void LSUB(string message)
         {
 
         }
 
-        private void APPEND(string message, StreamReader reader, StreamWriter writer)
+        private void STATUS(string message)
         {
 
         }
 
-        private void CHECK(string message, StreamReader reader, StreamWriter writer)
+        private void APPEND(string message)
         {
 
         }
 
-        private void CLOSE(string message, StreamReader reader, StreamWriter writer)
+        private void CHECK(string message)
         {
 
         }
 
-        private void EXPUNGE(string message, StreamReader reader, StreamWriter writer)
+        private void CLOSE(string message)
         {
 
         }
 
-        private void SEARCH(string message, StreamReader reader, StreamWriter writer)
+        private void EXPUNGE(string message)
         {
 
         }
 
-        private void FETCH(string message, StreamReader reader, StreamWriter writer)
+        private void SEARCH(string message)
         {
 
         }
 
-        private void STORE(string message, StreamReader reader, StreamWriter writer)
+        private void FETCH(string message)
         {
 
         }
 
-        private void COPY(string message, StreamReader reader, StreamWriter writer)
+        private void STORE(string message)
         {
 
         }
 
-        private void UID(string message, StreamReader reader, StreamWriter writer)
+        private void COPY(string message)
+        {
+
+        }
+
+        private void UID(string message)
         {
 
         }

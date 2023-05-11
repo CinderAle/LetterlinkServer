@@ -5,7 +5,23 @@ namespace LetterlinkServer
 {
     public class LoginHandler : Server
     {
+        
         private const int commandLength = 3;
+
+        protected override async void writeClient(string message)
+        {
+            StreamWriter writer = new StreamWriter(clientStream);
+            await writer.WriteAsync(message);
+            await writer.FlushAsync();
+        }
+
+        protected override string readClient()
+        {
+            StreamReader reader = new StreamReader(clientStream);
+            char[] buffer = new char[8192];
+            int charsRead = reader.Read(buffer, 0, 8192);
+            return new string(buffer).Substring(0, charsRead).Replace("\0", "");
+        }
 
         public LoginHandler(int port)
         {
@@ -22,23 +38,23 @@ namespace LetterlinkServer
             while (true)
             {
                 TcpClient client = await listener.AcceptTcpClientAsync();
-                handleMessages(client);
+                handleMessages();
             }
         }
 
-        protected override bool chooseAction(string? message, StreamReader reader, StreamWriter writer)
+        protected override bool chooseAction(string? message)
         {
             string command = message != null ? message.Substring(0, commandLength) : string.Empty;
             if (supportedActions.ContainsKey(command) && message != null)
             {
-                supportedActions[command].Invoke(message, reader, writer);
+                supportedActions[command].Invoke(message);
                 return true;
             }
             else
                 return false;
         }
 
-        protected override async void handleMessages(TcpClient client)
+        protected override async void handleMessages()
         {
             Console.WriteLine("Client connected");
             NetworkStream stream = client.GetStream();
@@ -48,7 +64,7 @@ namespace LetterlinkServer
 
             string? message = await reader.ReadLineAsync();
             Console.WriteLine("Client: " + message);
-            chooseAction(message, reader, writer);
+            chooseAction(message);
             
 
             client.Close();
@@ -62,28 +78,28 @@ namespace LetterlinkServer
         }
 
         //Usage: LOG username hash
-        private void LOG(string message, StreamReader reader, StreamWriter writer)
+        private void LOG(string message)
         {
             message = message.Trim();
             string[] logs = message.Split(' ');
             MySQLAccess database = new MySQLAccess();
             if (database.CheckPassword(logs[0], logs[1]))
-                writer.WriteAsync("250 login successful");
+                writeClient("250 login successful");
             else
-                writer.WriteAsync("401 invalid login data");
+                writeClient("550 invalid login data");
             database.Close();
         }
 
         //Usage: REG username hash
-        private void REG(string message, StreamReader reader, StreamWriter writer)
+        private void REG(string message)
         {
             message = message.Trim();
             string[] logs = message.Split(' ');
             MySQLAccess database = new MySQLAccess();
             if (database.InsertUser(logs[0], logs[1]))
-                writer.Write("250 registration successful");
+                writeClient("250 registration successful");
             else
-                writer.Write("401 registration failed");
+                writeClient("550 registration failed");
             database.Close();
         }
     }
