@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace LetterlinkServer
 {
@@ -10,17 +11,16 @@ namespace LetterlinkServer
 
         protected override async void writeClient(string message)
         {
-            StreamWriter writer = new StreamWriter(clientStream);
-            await writer.WriteAsync(message);
-            await writer.FlushAsync();
+            byte[] bytes = Encoding.ASCII.GetBytes(message + "\r\n");
+            await clientStream.WriteAsync(bytes, 0, bytes.Length);
+            Console.WriteLine($"[LOGIN] Server: '{message}'");
         }
 
         protected override string readClient()
         {
             StreamReader reader = new StreamReader(clientStream);
-            char[] buffer = new char[8192];
-            int charsRead = reader.Read(buffer, 0, 8192);
-            return new string(buffer).Substring(0, charsRead).Replace("\0", "");
+            string message = reader.ReadLine();
+            return message;
         }
 
         public LoginHandler(int port)
@@ -38,6 +38,7 @@ namespace LetterlinkServer
             while (true)
             {
                 TcpClient client = await listener.AcceptTcpClientAsync();
+                clientStream = client.GetStream();
                 handleMessages();
             }
         }
@@ -56,23 +57,21 @@ namespace LetterlinkServer
 
         protected override async void handleMessages()
         {
-            Console.WriteLine("Client connected");
-            NetworkStream stream = client.GetStream();
-            StreamReader reader = new StreamReader(stream);
-            StreamWriter writer = new StreamWriter(stream);
+            Console.WriteLine("[LOGIN] Client connected");
+            writeClient("220 letterlink.login greetings");
 
-
-            string? message = await reader.ReadLineAsync();
-            Console.WriteLine("Client: " + message);
+            string? message = readClient();
+            Console.WriteLine("[LOGIN] Client: " + message);
             chooseAction(message);
             
-
-            client.Close();
-            Console.WriteLine("Client disconnected");
+            if(client != null)
+                client.Close();
+            Console.WriteLine("[LOGIN] Client disconnected");
         }
 
         protected override void initActions()
         {
+            supportedActions = new Dictionary<string, Action<string>>();
             supportedActions.Add("LOG", LOG);
             supportedActions.Add("REG", REG);
         }
@@ -81,7 +80,7 @@ namespace LetterlinkServer
         private void LOG(string message)
         {
             message = message.Trim();
-            string[] logs = message.Split(' ');
+            string[] logs = message.Substring(4).Split(' ');
             MySQLAccess database = new MySQLAccess();
             if (database.CheckPassword(logs[0], logs[1]))
                 writeClient("250 login successful");
@@ -94,7 +93,7 @@ namespace LetterlinkServer
         private void REG(string message)
         {
             message = message.Trim();
-            string[] logs = message.Split(' ');
+            string[] logs = message.Substring(4).Split(' ');
             MySQLAccess database = new MySQLAccess();
             if (database.InsertUser(logs[0], logs[1]))
                 writeClient("250 registration successful");

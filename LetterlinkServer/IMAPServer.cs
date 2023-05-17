@@ -1,12 +1,20 @@
-﻿using System.Net;
+﻿using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Cms;
+using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection.PortableExecutable;
 using System.Runtime.ConstrainedExecution;
+using System.Text;
 
 namespace LetterlinkServer
 {
     public class IMAPServer : Server
     {
+        private string sender;
+        private string recipient;
+        private bool isAuthenticated;
+
         public IMAPServer()
         {
             port = 143;
@@ -15,17 +23,23 @@ namespace LetterlinkServer
 
         protected override async void writeClient(string message)
         {
-            StreamWriter writer = new StreamWriter(clientStream);
-            await writer.WriteAsync(message);
-            await writer.FlushAsync();
+            byte[] bytes = Encoding.ASCII.GetBytes(message + "\r\n");
+            await clientStream.WriteAsync(bytes, 0, bytes.Length);
+            Console.WriteLine($"[IMAP] Server: '{message}'");
         }
 
         protected override string readClient()
         {
             StreamReader reader = new StreamReader(clientStream);
-            char[] buffer = new char[8192];
-            int charsRead = reader.Read(buffer, 0, 8192);
-            return new string(buffer).Substring(0, charsRead).Replace("\0", "");
+            string message = reader.ReadLine();
+            return message;
+        }
+
+        private void clearContext()
+        {
+            sender = string.Empty;
+            recipient = string.Empty;
+            isAuthenticated = false;
         }
 
         public override async void startServer()
@@ -36,7 +50,9 @@ namespace LetterlinkServer
 
             while (true)
             {
+                clearContext();
                 TcpClient client = await listener.AcceptTcpClientAsync();
+                clientStream = client.GetStream();
                 handleMessages();
             }
         }
@@ -45,7 +61,7 @@ namespace LetterlinkServer
         {
             string command = string.Empty;
             foreach(string method in supportedActions.Keys)
-                if (message != null && message.StartsWith(method))
+                if (message != null && message.Substring(10).StartsWith(method))
                 {
                     command = method; 
                     break;
@@ -53,7 +69,7 @@ namespace LetterlinkServer
             if (!command.Equals(string.Empty) && message != null)
             {
                 supportedActions[command].Invoke(message);
-                return command.Equals("LOGOUT");
+                return !command.Equals("LOGOUT");
             }
             else
                 return true; 
@@ -62,20 +78,28 @@ namespace LetterlinkServer
         protected override async void handleMessages()
         {
             Console.WriteLine("Client connected");
-            NetworkStream stream = client.GetStream();
-            StreamReader reader = new StreamReader(stream);
-            StreamWriter writer = new StreamWriter(stream);
+            writeClient("* OK IMAP4 server ready.");
+            
 
             while (true)
             {
-                string? message = await reader.ReadLineAsync();
-                Console.WriteLine("Client: " + message);
+                string message;
+                try
+                {
+                    message = readClient();
+                }
+                catch (Exception)
+                {
+                    break;
+                }
+                Console.WriteLine("[IMAP] Client: " + message.Trim());
                 if (!chooseAction(message))
                     break;
             }
 
-            client.Close();
-            Console.WriteLine("Client disconnected");
+            if (client != null)
+                client.Close();
+            Console.WriteLine("[IMAP] Client disconnected");
         }
         
         protected override void initActions()
@@ -105,26 +129,82 @@ namespace LetterlinkServer
             supportedActions.Add("STORE", STORE);
             supportedActions.Add("COPY", COPY);
             supportedActions.Add("UID", UID);
+            supportedActions.Add("STARTTLS", STARTTLS);
         }
 
         private void CAPABILITY(string message)
         {
-
+            writeClient("* CAPABILITY IMAP4rev1 AUTH=PLAIN AUTH=LOGIN");
+            writeClient(message.Substring(0, 10) + "OK completed");
         }
 
         private void NOOP(string message)
         {
-
+            writeClient("* OK");
         }
 
         private void LOGOUT(string message)
         {
+            writeClient(message.Substring(0, 10) + "BYE letterlink");
+        }
 
+        private bool checkAuth(string login, string password)
+        {
+            TcpClient logger = new TcpClient();
+            logger.Connect("localhost", 85);
+            StreamReader reader = new StreamReader(logger.GetStream());
+            StreamWriter writer = new StreamWriter(logger.GetStream());
+            try
+            {
+                if (!reader.ReadLine().StartsWith("220"))
+                    throw new Exception();
+                writer.WriteLine($"LOG {login} {password}");
+                writer.Flush();
+                string answer = reader.ReadLine();
+                logger.Close();
+                return answer.StartsWith("250");
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private void authPlain(string code)
+        {
+            writeClient("+");
+            string userPassword = readClient();
+            string[] logs = Encoding.ASCII.GetString(Convert.FromBase64String(userPassword)).Substring(1).Split('\0');
+            Console.WriteLine($"User:{logs[0]} Password:{logs[1]}");
+            isAuthenticated = checkAuth(logs[0], logs[1]);
+            if(isAuthenticated)
+                writeClient(code + "OK AUTH complete");
+            else            
+                writeClient(code + "NO failed to authenticate");
+        }
+
+        private void authLogin(string code)
+        {
+            writeClient("+");
+            string username = Encoding.ASCII.GetString(Convert.FromBase64String(readClient()));
+            writeClient("+");
+            string password = Encoding.ASCII.GetString(Convert.FromBase64String(readClient()));
+            Console.WriteLine($"User: {username} Password: {password}");
+            isAuthenticated = checkAuth(username, password);
+            if (isAuthenticated)
+                writeClient(code + "OK AUTH complete");
+            else
+                writeClient(code + "NO failed to authenticate");
         }
 
         private void AUTHENTICATE(string message)
         {
-
+            if (message.Contains("PLAIN"))
+                authPlain(message.Substring(0, 10));      
+            else if (message.Contains("LOGIN"))
+                authLogin(message.Substring(0, 10));
+            else
+                writeClient(message.Substring(0, 10) + "NO the AUTH method is not available");
         }
 
         private void LOGIN(string message)
@@ -168,7 +248,9 @@ namespace LetterlinkServer
         }
         private void LIST(string message)
         {
-
+            writeClient("* LIST (\\Noselect) \"/\" \"\"");
+            writeClient("* LIST (\\HasNoChildren) \"/\" \"INBOX\"");
+            writeClient(message.Substring(0, 10) + "OK LIST completed");
         }
 
         private void LSUB(string message)
@@ -224,6 +306,11 @@ namespace LetterlinkServer
         private void UID(string message)
         {
 
+        }
+
+        private void STARTTLS(string message)
+        {
+            writeClient(message.Substring(0, 10) + "OK Begin TLS negotiation now.");   
         }
     }
 }
