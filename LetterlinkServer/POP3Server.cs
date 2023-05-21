@@ -28,7 +28,7 @@ namespace LetterlinkServer
             return new string(buffer).Substring(0, charsRead).Replace("\0", "");
         }
 
-        public override async void startServer()
+        public override async void startServer(object? ctsObject)
         {
             TcpListener listener = new TcpListener(IPAddress.Any, port);
             listener.Start();

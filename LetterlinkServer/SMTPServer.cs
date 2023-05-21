@@ -1,9 +1,5 @@
-﻿using Org.BouncyCastle.Tls.Crypto.Impl.BC;
-using System.Collections;
-using System.Net;
-using System.Net.Mail;
+﻿using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Text;
 
 namespace LetterlinkServer
@@ -15,12 +11,13 @@ namespace LetterlinkServer
         private string recipient;
         private bool isAuthenticated;
         private HashSet<string> unauthorizedActions;
+        TcpListener listener;
 
-        public SMTPServer()
+        public SMTPServer(TcpListener listener)
         {
-            port = 25;
             initActions();
             initUnauthorizedActions();
+            this.listener= listener;
         }
 
         private void clearContext()
@@ -44,20 +41,24 @@ namespace LetterlinkServer
             return message;
         }
 
-        public override async void startServer()
+        public override async void startServer(object? ctsObject)
         {
-            TcpListener listener = new TcpListener(IPAddress.Any, port);
-            listener.Start();
-            Console.WriteLine($"SMTP server started on port {port}");
-
+            CancellationToken cts = (CancellationToken) ctsObject;
             while (true)
             {
                 clearContext();
                 try
                 {
-                    TcpClient client = await listener.AcceptTcpClientAsync();
+                    TcpClient client = await listener.AcceptTcpClientAsync(cts);
+                    this.client = client;
                     clientStream = client.GetStream();
                     handleMessages();
+                }
+                catch (OperationCanceledException)
+                {
+                    if (client != null)
+                        client.Close();
+                    break;
                 }
                 catch (Exception)
                 {
@@ -105,7 +106,8 @@ namespace LetterlinkServer
                 {
                     break;
                 }
-                Console.WriteLine("[SMTP] Client: " + message.Trim());
+                if(message != null)
+                    Console.WriteLine("[SMTP] Client: " + message.Trim());
                 if (!chooseAction(message))
                     break;
             }
@@ -206,6 +208,25 @@ namespace LetterlinkServer
             }
         }
 
+        private void tryAuthenticate(string login, string password)
+        {
+            try
+            {
+                isAuthenticated = checkAuth(login, password);
+                if (isAuthenticated)
+                {
+                    this.sender = login;
+                    writeClient("235 Client authenticated");
+                }
+                else
+                    throw new Exception();
+            }
+            catch (Exception)
+            {
+                writeClient("535 Credentials not valid");
+            }
+        }
+
         private void authPlain(string message)
         {
             int plainStart = message.IndexOf("PLAIN");
@@ -213,16 +234,19 @@ namespace LetterlinkServer
             string userPassword = message.Substring(userStart).Trim();
             string credentials = Encoding.ASCII.GetString(Convert.FromBase64String(userPassword)).Substring(1);
             string[] logs = credentials.Split('\0');
-            isAuthenticated = checkAuth(logs[0], logs[1]);
-            if (isAuthenticated)
-                writeClient("235 Client authenticated");
+            if (logs.Length == 2)
+                tryAuthenticate(logs[0], logs[1]);
             else
                 writeClient("535 Credentials not valid");
         }
 
         private void authLogin(string message)
         {
-            writeClient("250 OK");
+            writeClient("334 VXNlcm5hbWU6");
+            string username = readClient();
+            writeClient("334 UGFzc3dvcmQ6");
+            string password = readClient();
+            tryAuthenticate(Encoding.ASCII.GetString(Convert.FromBase64String(username)), Encoding.ASCII.GetString(Convert.FromBase64String(password)));
         }
 
         //SMTP command
@@ -271,15 +295,21 @@ namespace LetterlinkServer
         {
             int from = message.IndexOf("FROM:");
             int senderStart = message.IndexOf('<', from);
-            int senderEnd = message.IndexOf('@', senderStart);
-            return message.Substring(senderStart + 1, senderEnd - senderStart - 1);
+            int senderEnd = message.IndexOf('>', senderStart);
+            if (message.Substring(senderStart + 1, senderEnd - senderStart - 1).Equals(this.sender + "@letterlink.com   "))
+                return this.sender;
+            else
+                return string.Empty;
         }
 
         //SMTP command
         private void MAIL(string message)
         {
             this.sender = getSender(message);
-            writeClient("250 OK");
+            if (!this.sender.Equals(string.Empty))
+                writeClient("250 OK");
+            else
+                writeClient("550 Invalid sender address");
         }
 
         private string getRecipient(string message)
@@ -312,14 +342,45 @@ namespace LetterlinkServer
             return mailContents.ToString();
         }
 
+        private int[]? listMessage()
+        {
+            MySQLAccess database = new MySQLAccess();
+            int[]? uids = database.AddMessage(this.sender, this.recipient);
+            database.Close();
+            return uids;
+        }
+
+        private bool saveMessage(string message)
+        {
+            int[]? uids = listMessage();
+            try
+            {
+                if (uids != null && uids.Length == 2)
+                {
+                    File.WriteAllText($"inbox/{uids[0]}.txt", message);
+                    File.WriteAllText($"sent/{uids[1]}.txt", message);
+                    return true;
+                }
+                else
+                    throw new Exception();
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         //SMTP command
         private void DATA(string message)
         {
             writeClient("354 Enter message");
             string contents = getMessageContents();
             Console.WriteLine("From: " + this.sender + "\r\nTo: " + this.recipient);
-            //Console.WriteLine("Client data:: " + mailContents.ToString());
-            writeClient("250 OK");
+            Console.WriteLine("Client data:: " + contents);
+            if (saveMessage(contents))
+                writeClient("250 Message sent");
+            else
+                writeClient("550 Failed to save the message");
         }
 
         //SMTP sommand

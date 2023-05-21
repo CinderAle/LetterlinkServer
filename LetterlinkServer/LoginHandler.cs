@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace LetterlinkServer
 {
@@ -8,6 +9,7 @@ namespace LetterlinkServer
     {
         
         private const int commandLength = 3;
+        TcpListener listener;
 
         protected override async void writeClient(string message)
         {
@@ -23,23 +25,35 @@ namespace LetterlinkServer
             return message;
         }
 
-        public LoginHandler(int port)
+        public LoginHandler(TcpListener listener)
         {
-            this.port = port;
+            this.listener = listener;
             initActions();
         }
 
-        public override async void startServer()
+        public override async void startServer(object? ctsObject)
         {
-            TcpListener listener = new TcpListener(IPAddress.Any, port);
-            listener.Start();
-            Console.WriteLine($"Logs server started on port {port}");
-
+            CancellationToken cts = (CancellationToken)ctsObject;
             while (true)
             {
-                TcpClient client = await listener.AcceptTcpClientAsync();
-                clientStream = client.GetStream();
-                handleMessages();
+                try
+                {
+                    TcpClient client = await listener.AcceptTcpClientAsync(cts);
+                    this.client = client;
+                    clientStream = client.GetStream();
+                    handleMessages();
+                }
+                catch (OperationCanceledException)
+                {
+                    if (client != null)
+                        client.Close();
+                    break;
+                }
+                catch (Exception)
+                {
+                    if (client != null)
+                        client.Close();
+                }
             }
         }
 
