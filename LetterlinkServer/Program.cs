@@ -42,15 +42,15 @@ internal class Program
 
     private static int getOption(int[] diapason)
     {
-        Console.Write("Choose option: ");
         if(diapason != null)
         {
             if (diapason.Length == 1)
-                return 1;
+                return 0;
             else
             {
                 try
                 {
+                    Console.Write("Choose option: ");
                     int temp = Convert.ToInt32(Console.ReadLine());
                     if (temp < diapason[0] || temp > diapason[1])
                         throw new Exception();
@@ -133,10 +133,10 @@ internal class Program
                 login[i] = new Thread(new ParameterizedThreadStart(new LoginHandler(listener).startServer));
                 login[i].Start(loginCancel[i].Token);
             }
-            Console.WriteLine($"SMTP server started on port {port}");
+            Console.WriteLine($"Login server started on port {port}");
         }
         else
-            Console.WriteLine("SMTP server is already started");
+            Console.WriteLine("Login server is already started");
     }
 
     private static void stopSMTPServer()

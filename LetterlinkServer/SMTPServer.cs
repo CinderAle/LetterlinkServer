@@ -296,7 +296,7 @@ namespace LetterlinkServer
             int from = message.IndexOf("FROM:");
             int senderStart = message.IndexOf('<', from);
             int senderEnd = message.IndexOf('>', senderStart);
-            if (message.Substring(senderStart + 1, senderEnd - senderStart - 1).Equals(this.sender + "@letterlink.com   "))
+            if (message.Substring(senderStart + 1, senderEnd - senderStart - 1).Equals(this.sender + "@letterlink.com"))
                 return this.sender;
             else
                 return string.Empty;
@@ -317,14 +317,24 @@ namespace LetterlinkServer
             int to = message.IndexOf("TO:");
             int recipientStart = message.IndexOf('<', to);
             int recipientEnd = message.IndexOf('@', recipientStart);
-            return message.Substring(recipientStart + 1, recipientEnd - recipientStart - 1);
+            int addressEnd = message.IndexOf('>', recipientStart);
+            if (message.Substring(recipientEnd + 1, addressEnd - recipientEnd - 1).Equals("@letterlink.com"))
+            {
+                this.recipient = message.Substring(recipientStart + 1, recipientEnd - recipientStart - 1);
+                return this.recipient;
+            }
+            else
+                return string.Empty;
         }
 
         //SMTP command
         private void RCPT(string message)
         {
             this.recipient = getRecipient(message);
-            writeClient("250 OK");
+            if (!this.recipient.Equals(string.Empty))
+                writeClient("250 OK");
+            else
+                writeClient("550 Invaild recipient address");
         }
 
         private string getMessageContents()
@@ -375,8 +385,6 @@ namespace LetterlinkServer
         {
             writeClient("354 Enter message");
             string contents = getMessageContents();
-            Console.WriteLine("From: " + this.sender + "\r\nTo: " + this.recipient);
-            Console.WriteLine("Client data:: " + contents);
             if (saveMessage(contents))
                 writeClient("250 Message sent");
             else

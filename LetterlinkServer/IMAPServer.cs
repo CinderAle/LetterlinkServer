@@ -83,7 +83,7 @@ namespace LetterlinkServer
             string command = string.Empty;
 
             foreach(string method in supportedActions.Keys)
-                if (message != null && (message.Substring(10).StartsWith(method) || message.StartsWith(method)))
+                if (message != null && (message.Substring(getCode(message).Length).StartsWith(method) || message.StartsWith(method)))
                 {
                     command = method; 
                     break;
@@ -114,7 +114,8 @@ namespace LetterlinkServer
                 {
                     break;
                 }
-                Console.WriteLine("[IMAP] Client: " + message.Trim());
+                if(message != null)
+                    Console.WriteLine("[IMAP] Client: " + message.Trim());
                 if (!chooseAction(message))
                     break;
             }
@@ -156,20 +157,32 @@ namespace LetterlinkServer
 
         }
 
-        private void CAPABILITY(string message)
+        private string getCode(string message)
         {
-            writeClient("* CAPABILITY IMAP4rev1 AUTH=PLAIN AUTH=LOGIN");
-            writeClient(message.Substring(0, 10) + "OK completed");
+            string[] words = message.Split(' ');
+            if (words != null && words.Length > 1)
+                return words[0] + ' ';
+            else
+                return string.Empty;
         }
 
+        //IMAP command
+        private void CAPABILITY(string message)
+        {
+            writeClient("* CAPABILITY IMAP4rev1 STARTTLS AUTH=PLAIN AUTH=LOGIN");
+            writeClient(getCode(message) + "OK completed");
+        }
+
+        //IMAP command
         private void NOOP(string message)
         {
             writeClient("* OK");
         }
 
+        //IMAP command
         private void LOGOUT(string message)
         {
-            writeClient(message.Substring(0, 10) + "BYE letterlink");
+            writeClient(getCode(message) + "BYE letterlink");
         }
 
         private bool checkAuth(string login, string password)
@@ -220,6 +233,9 @@ namespace LetterlinkServer
         {
             try
             {
+                int loginAt = login.IndexOf('@');
+                if(loginAt > 0)
+                    login = login.Substring(0, loginAt);
                 isAuthenticated = checkAuth(login, password);
                 if (isAuthenticated)
                 {
@@ -231,39 +247,65 @@ namespace LetterlinkServer
             }
             catch (Exception)
             {
-                writeClient(code + "No failed to authenticate");
+                writeClient(code + "NO failed to authenticate");
             }
         }
 
+        //IMAP command
         private void AUTHENTICATE(string message)
         {
             if (message.Contains("PLAIN"))
-                authPlain(message.Substring(0, 10));      
+                authPlain(getCode(message));      
             else if (message.Contains("LOGIN"))
-                authLogin(message.Substring(0, 10));
+                authLogin(getCode(message));
             else
-                writeClient(message.Substring(0, 10) + "NO the AUTH method is not available");
+                writeClient(getCode(message) + "NO the AUTH method is not available");
         }
 
+        //IMAP command
         private void LOGIN(string message)
         {
             string[] logs = message.Split(' ');
             if (logs.Length == 4)
-                tryAuthenticate(logs[2], logs[3], message.Substring(0, 10));
+                tryAuthenticate(logs[2], logs[3], getCode(message));
             else
-                writeClient(message.Substring(0, 10) + "NO failed to authenticate");
+                writeClient(getCode(message) + "NO failed to authenticate");
         }
 
+        private int calcFolderMessages(string folder)
+        {
+            MySQLAccess database = new MySQLAccess();
+            int folders = database.CalcMessagesInFolder(this.login, folder);
+            database.Close();
+            return folders;
+        }
+
+        private int calcRecentMessages(string folder)
+        {
+            MySQLAccess database = new MySQLAccess();
+            int folders = database.CalcRecentMessagesInFolder(this.login, folder);
+            database.Close();
+            return folders;
+        }
+
+        //IMAP command
         private void SELECT(string message)
         {
             try
             {
-                int startFolder = message.IndexOf('\"') + 1;
-                string folder = message.Substring(startFolder);
+                string[] words = message.Split(" ");
+                string folder = words[2];
                 List<string> folders = getInboxFolders();
                 if (folders.Contains(folder) || folder.Equals("INBOX") || folder.Equals("SENT"))
                 {
-                    writeClient(message.Substring(0, 10) + "OK [READ-WRITE] SELECT completed");
+                    int messages = calcFolderMessages(folder);
+                    if (messages >= 0)
+                        writeClient($"* {messages} EXISTS");
+                    else
+                        throw new Exception();
+                    writeClient($"* {calcRecentMessages(folder)} RECENT");
+                    writeClient("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)");
+                    writeClient(getCode(message) + "OK [READ-WRITE] SELECT completed.");
                     this.folder = folder;
                 }
                 else
@@ -271,10 +313,11 @@ namespace LetterlinkServer
             }
             catch (Exception)
             {
-                writeClient(message.Substring(0, 10) + "NO unable to select the folder");
+                writeClient(getCode(message) + "NO unable to select the folder");
             }
         }
 
+        //IMAP command
         private void CREATE(string message)
         {
             try
@@ -290,7 +333,7 @@ namespace LetterlinkServer
                 {
                     MySQLAccess database = new MySQLAccess();
                     if (database.CreateFolder(this.login, folder))
-                        writeClient(message.Substring(0, 10) + "OK folder created");
+                        writeClient(getCode(message) + "OK folder created");
                     else
                         throw new Exception();
                     database.Close();
@@ -299,10 +342,11 @@ namespace LetterlinkServer
             }
             catch (Exception)
             {
-                writeClient(message.Substring(0, 10) + "NO unable to create the folder");
+                writeClient(getCode(message) + "NO unable to create the folder");
             }
         }
 
+        //IMAP command
         private void DELETE(string message)
         {
             MySQLAccess database = new MySQLAccess();
@@ -325,11 +369,13 @@ namespace LetterlinkServer
             }
         }
 
+        //IMAP command
         private void SUBSCRIBE(string message)
         {
 
         }
 
+        //IMAP command
         private void UNSUBSCRIBE(string message)
         {
 
@@ -372,6 +418,7 @@ namespace LetterlinkServer
                     writeClient($"* LIST (\\HasNoChildren) \"/\" \"{item}\"");
         }
 
+        //IMAP command
         private void LIST(string message)
         {
             string[]? info = getFolderInfo(message);
@@ -380,22 +427,23 @@ namespace LetterlinkServer
                 if (info[1].Equals("INBOX") || info[1].Equals("INBOX/*"))
                 {
                     writeFolderListToClient(getInboxFolders());
-                    writeClient(message.Substring(0, 10) + "OK LIST completed");
+                    writeClient(getCode(message) + "OK LIST completed");
                 }
-                else if (info[1].Equals("*") || info[1].Equals(string.Empty))
+                else if (info[1].Equals("*") || info[1].Equals(string.Empty) || info[1].Equals("%"))
                 {
-                    writeClient("* LIST (\\Noselect) \"/\" \"\"");
+                    //writeClient("* LIST (\\Noselect) \"/\" \"\"");
                     writeClient("* LIST (\\HasChildren) \"/\" \"INBOX\"");
                     writeClient("* LIST (\\HasNoChildren) \"/\" \"SENT\"");
-                    writeClient(message.Substring(0, 10) + "OK LIST completed");
+                    writeClient(getCode(message) + "OK LIST completed");
                 }
                 else
-                    writeClient(message.Substring(0, 10) + "OK LIST completed");
+                    writeClient(getCode(message) + "OK LIST completed");
             }
             else
-                writeClient(message.Substring(0, 10) + "BAD invalid arguments");
+                writeClient(getCode(message) + "BAD invalid arguments");
         }
 
+        //IMAP command
         private void EXPUNGE(string message)
         {
             MySQLAccess database = new MySQLAccess();
@@ -406,14 +454,14 @@ namespace LetterlinkServer
                 {
                     foreach (string id in ids)
                         writeClient($"* {id} EXPUNGE");
-                    writeClient(message.Substring(0, 10) + "OK EXPUNGE completed.");
+                    writeClient(getCode(message) + "OK EXPUNGE completed.");
                 }
                 else
                     throw new Exception();
             }
             catch (Exception)
             {
-                writeClient(message.Substring(0, 10) + "NO EXPUNGE failed.");
+                writeClient(getCode(message) + "NO EXPUNGE failed.");
             }
             finally
             {
@@ -450,6 +498,7 @@ namespace LetterlinkServer
             }
         }
 
+        //IMAP command
         private void SEARCH(string message)
         {
             if(message.Contains("SEARCH ALL"))
@@ -487,6 +536,7 @@ namespace LetterlinkServer
             }
         }
 
+        //IMAP command
         private void FETCH(string message)
         {
             try
@@ -600,6 +650,7 @@ namespace LetterlinkServer
                 writeClient("A00000001 NO colud not set the flags.");
         }
 
+        //IMAP command
         private void STORE(string message)
         {
             string[] words = message.Split(' ');
@@ -685,6 +736,7 @@ namespace LetterlinkServer
             }
         }
 
+        //IMAP command
         private void UID(string message)
         {
             string[] words = message.Split(' ');

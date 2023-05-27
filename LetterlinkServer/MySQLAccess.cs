@@ -306,6 +306,52 @@ namespace LetterlinkServer
                 return null;
         }
 
+        public int CalcMessagesInFolder(string login, string folder)
+        {
+            if (connection != null)
+            {
+                int counter = 0;
+                string query;
+                if (folder.Equals("INBOX"))
+                    query = $"SELECT uid FROM {sent_table} WHERE(login='{login}')";
+                else if (folder.Equals("SENT"))
+                    query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}')";
+                else if (GetInboxFolders(login).Contains(folder))
+                    query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}',folder='{folder}')";
+                else
+                    return -1;
+                MySqlDataReader reader = new MySqlCommand(query, connection).ExecuteReader();
+                while (reader.Read())
+                    counter++;
+                return counter;
+            }
+            else
+                return -1;
+        }
+
+        public int CalcRecentMessagesInFolder(string login, string folder)
+        {
+            if (connection != null)
+            {
+                int counter = 0;
+                string query;
+                if (folder.Equals("INBOX"))
+                    query = $"SELECT uid FROM {sent_table} WHERE(login='{login}' AND flags='\\Recent')";
+                else if (folder.Equals("SENT"))
+                    query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}' AND flags='\\Recent')";
+                else if (GetInboxFolders(login).Contains(folder))
+                    query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}' AND folder='{folder}' AND flags='\\Recent')";
+                else
+                    return -1;
+                MySqlDataReader reader = new MySqlCommand(query, connection).ExecuteReader();
+                while (reader.Read())
+                    counter++;
+                return counter;
+            }
+            else
+                return -1;
+        }
+
         public void Close()
         {
             if (connection != null)
