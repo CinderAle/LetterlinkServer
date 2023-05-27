@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
 using System.Runtime.ConstrainedExecution;
 using System.Text;
 using System.Xml.Linq;
@@ -144,6 +145,7 @@ namespace LetterlinkServer
             supportedActions.Add("FETCH", FETCH);
             supportedActions.Add("STORE", STORE);
             supportedActions.Add("UID", UID);
+            supportedActions.Add("CLOSE", CLOSE);
         }
 
         private void initUnauthorizedActions()
@@ -176,7 +178,7 @@ namespace LetterlinkServer
         //IMAP command
         private void NOOP(string message)
         {
-            writeClient("* OK");
+            writeClient(getCode(message) + "OK NOOP completed");
         }
 
         //IMAP command
@@ -515,6 +517,14 @@ namespace LetterlinkServer
             return flag; 
         }
 
+        private string getLetterField(string id, bool isUID, string field)
+        {
+            string? contents = fetchLetterBody(id, isUID);
+            int dateStart = contents.IndexOf(field);
+            int dateEnd = contents.IndexOf("\r\n", dateStart);
+            return contents.Substring(dateStart + field.Length, dateEnd - dateStart - field.Length).Trim();
+        }
+
         private string? fetchLetterBody(string id, bool isUID)
         {
             if (!isUID)
@@ -536,13 +546,19 @@ namespace LetterlinkServer
             }
         }
 
+        private string getLoginFromAddress(string addresss)
+        {
+            int at = addresss.IndexOf('@');
+            return addresss.Substring(0, at);
+        }
+
         //IMAP command
         private void FETCH(string message)
         {
             try
             {
                 string[] splits = message.Split(' ');
-                string id = splits[1];
+                string id = splits[2];
                 string modifiersLine = message.Substring(message.IndexOf('(') + 1);
                 string[] modifiers = modifiersLine.Substring(0, modifiersLine.Length - 1).Split(' ');
                 string answer = string.Empty;
@@ -554,18 +570,40 @@ namespace LetterlinkServer
                     else
                         throw new Exception();
                 }
-                if (modifiers.Contains("BODY[]")) {
+                if (modifiers.Contains("ENVELOPE"))
+                {
+                    string date = getLetterField(id, false, "Date:");
+                    string subject = getLetterField(id, false, "Subject:");
+                    string from = getLoginFromAddress(getLetterField(id, false, "From:"));
+                    string to = getLoginFromAddress(getLetterField(id, false, "To:"));
+                    string messageID = getLetterField(id, false, "Message-ID:");
+
+                    answer += $"ENVELOPE (\"{date}\" \"{subject}\" ((\"\" NIL \"{from}\" \"letterlink.com\")) NIL NIL ((\"\" NIL \"{to}\" \"letterlink.com\")) NIL NIL NIL \"{messageID}\") ";
+                }
+                if (modifiers.Contains("INTERNALDATE"))
+                {
+                    string date = getLetterField(id, false, "Date:");
+                    answer += $"INTERNALDATE \"{date}\" ";
+                }
+                if (modifiers.Contains("RFC822.SIZE"))
+                {
+                    int size = fetchLetterBody(id, false).Length;
+                    answer += $"RFC822.SIZE {size}";
+                }
+                if (modifiers.Contains("BODY[]") || modifiers.Contains("RFC822"))
+                {
                     string? contents = fetchLetterBody(id, false);
                     if (contents != null)
                         answer += "BODY[] {" + contents.Length + "}\r\n" + contents;
                     else
                         throw new Exception();
                 }
-                writeClient($"* {id} FETCH ({answer})");   
+                writeClient($"* {id} FETCH ({answer})");
+                writeClient(getCode(message) + "OK FETCH completed.");
             }
             catch (Exception)
             {
-                writeClient("* NO could not fetch the letter");
+                writeClient(getCode(message) + "NO could not fetch the letter");
             }
         }
 
@@ -766,6 +804,12 @@ namespace LetterlinkServer
             {
                 writeClient("A00000001 BAD wrong syntax.");
             }
+        }
+
+        private void CLOSE(string message)
+        {
+            folder = string.Empty;
+            writeClient(getCode(message) + "OK CLOSE completed.");
         }
     }
 }

@@ -313,9 +313,9 @@ namespace LetterlinkServer
                 int counter = 0;
                 string query;
                 if (folder.Equals("INBOX"))
-                    query = $"SELECT uid FROM {sent_table} WHERE(login='{login}')";
-                else if (folder.Equals("SENT"))
                     query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}')";
+                else if (folder.Equals("SENT"))
+                    query = $"SELECT uid FROM {sent_table} WHERE(login='{login}')";
                 else if (GetInboxFolders(login).Contains(folder))
                     query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}',folder='{folder}')";
                 else
@@ -336,9 +336,9 @@ namespace LetterlinkServer
                 int counter = 0;
                 string query;
                 if (folder.Equals("INBOX"))
-                    query = $"SELECT uid FROM {sent_table} WHERE(login='{login}' AND flags='\\Recent')";
-                else if (folder.Equals("SENT"))
                     query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}' AND flags='\\Recent')";
+                else if (folder.Equals("SENT"))
+                    query = $"SELECT uid FROM {sent_table} WHERE(login='{login}' AND flags='\\Recent')";
                 else if (GetInboxFolders(login).Contains(folder))
                     query = $"SELECT uid FROM {inbox_table} WHERE(login='{login}' AND folder='{folder}' AND flags='\\Recent')";
                 else

@@ -72,16 +72,16 @@ namespace LetterlinkServer
         {
             string command = (message != null) && message.Length >= commandLength ? message.Substring(0, commandLength) : string.Empty;
             if (supportedActions.ContainsKey(command) && message != null) {
-                if (unauthorizedActions.Contains(command) || isAuthenticated)
-                {
+                //if (unauthorizedActions.Contains(command) || isAuthenticated)
+                //{
                     supportedActions[command].Invoke(message);
                     return !command.Equals("QUIT");
-                }
-                else
+                //}
+                /*else
                 {
                     writeClient("535 Authentication required");
                     return true;
-                }
+                }*/
             }
             else
             {
@@ -295,9 +295,11 @@ namespace LetterlinkServer
         {
             int from = message.IndexOf("FROM:");
             int senderStart = message.IndexOf('<', from);
+            int nameAt = message.IndexOf('@');
             int senderEnd = message.IndexOf('>', senderStart);
-            if (message.Substring(senderStart + 1, senderEnd - senderStart - 1).Equals(this.sender + "@letterlink.com"))
-                return this.sender;
+
+            if (message.Substring(senderStart + 1, senderEnd - senderStart - 1).EndsWith("@letterlink.com"))
+                return message.Substring(senderStart + 1, nameAt - senderStart - 1);
             else
                 return string.Empty;
         }
@@ -314,15 +316,13 @@ namespace LetterlinkServer
 
         private string getRecipient(string message)
         {
-            int to = message.IndexOf("TO:");
-            int recipientStart = message.IndexOf('<', to);
-            int recipientEnd = message.IndexOf('@', recipientStart);
-            int addressEnd = message.IndexOf('>', recipientStart);
-            if (message.Substring(recipientEnd + 1, addressEnd - recipientEnd - 1).Equals("@letterlink.com"))
-            {
-                this.recipient = message.Substring(recipientStart + 1, recipientEnd - recipientStart - 1);
-                return this.recipient;
-            }
+            int from = message.IndexOf("TO:");
+            int senderStart = message.IndexOf('<', from);
+            int nameAt = message.IndexOf('@');
+            int senderEnd = message.IndexOf('>', senderStart);
+
+            if (message.Substring(senderStart + 1, senderEnd - senderStart - 1).EndsWith("@letterlink.com"))
+                return message.Substring(senderStart + 1, nameAt - senderStart - 1);
             else
                 return string.Empty;
         }
@@ -367,8 +367,8 @@ namespace LetterlinkServer
             {
                 if (uids != null && uids.Length == 2)
                 {
-                    File.WriteAllText($"inbox/{uids[0]}.txt", message);
-                    File.WriteAllText($"sent/{uids[1]}.txt", message);
+                    File.WriteAllText($"sent/{uids[0]}.txt", message);
+                    File.WriteAllText($"inbox/{uids[1]}.txt", message);
                     return true;
                 }
                 else
